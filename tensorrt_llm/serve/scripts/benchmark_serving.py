@@ -428,12 +428,16 @@ async def benchmark(
 
     benchmark_start_time = time.perf_counter()
     tasks: list[asyncio.Task] = []
+    # Reuse connections, but drop any that sat idle for over 1 s. Servers
+    # close idle keep-alive connections (trtllm-serve after 5 s), and aiohttp
+    # does not resend a POST that meets such a close, so the request is lost.
+    # The client never keeps a connection long enough to meet that close.
     session = aiohttp.ClientSession(trust_env=env_configured(),
                                     timeout=AIOHTTP_TIMEOUT,
                                     connector=aiohttp.TCPConnector(
                                         limit=0,
                                         limit_per_host=0,
-                                        force_close=True))
+                                        keepalive_timeout=1))
 
     i = 0
     async for request in get_request(input_requests, request_rate, burstiness):
